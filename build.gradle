@@ -1,1 +1,17 @@
 
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.ps4.filetransfer'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.ps4.filetransfer'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+}
