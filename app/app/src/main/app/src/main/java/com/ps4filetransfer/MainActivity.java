@@ -1,5 +1,3 @@
-
-
 package com.ps4filetransfer;
 
 import android.app.Activity;
@@ -8,159 +6,181 @@ import android.content.Intent;
 import android.net.Uri;
 import android.view.View;
 import android.widget.*;
-import java.io.InputStream;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import android.text.InputType;
+import android.database.Cursor;
+import android.provider.OpenableColumns;
+
 import org.apache.commons.net.ftp.FTP;
 import org.apache.commons.net.ftp.FTPClient;
 
+import java.io.InputStream;
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class MainActivity extends Activity {
 
-    EditText ip, porta, usuario, senha, caminho;
+    EditText ip, port, user, pass, folder;
     TextView status;
-    Button escolher, enviar;
-    Uri arquivoSelecionado;
-    String nomeArquivo = "";
+    Uri selectedFile;
+    String fileName;
     ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        LinearLayout tela = new LinearLayout(this);
-        tela.setOrientation(LinearLayout.VERTICAL);
-        tela.setPadding(30, 30, 30, 30);
-        tela.setBackgroundColor(0xFF151515);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(25, 25, 25, 25);
 
-        TextView titulo = new TextView(this);
-        titulo.setText("PS4 FILE TRANSFER");
-        titulo.setTextSize(25);
-        titulo.setTextColor(0xFFFFFFFF);
-        tela.addView(titulo);
+        TextView title = new TextView(this);
+        title.setText("PS4 FILE TRANSFER");
+        title.setTextSize(25);
+        layout.addView(title);
 
-        ip = campo(tela, "IP do PS4");
-        porta = campo(tela, "Porta FTP (2121)");
-        porta.setText("2121");
-        usuario = campo(tela, "Usuário FTP");
-        usuario.setText("anonymous");
-        senha = campo(tela, "Senha FTP");
-        caminho = campo(tela, "Pasta de destino no PS4");
-        caminho.setText("/data");
+        ip = new EditText(this);
+        ip.setHint("IP do PS4");
+        layout.addView(ip);
 
-        escolher = new Button(this);
-        escolher.setText("ESCOLHER ARQUIVO");
-        tela.addView(escolher);
+        port = new EditText(this);
+        port.setHint("Porta FTP");
+        port.setInputType(InputType.TYPE_CLASS_NUMBER);
+        port.setText("2121");
+        layout.addView(port);
 
-        enviar = new Button(this);
-        enviar.setText("ENVIAR PARA O PS4");
-        tela.addView(enviar);
+        user = new EditText(this);
+        user.setHint("Usuário FTP");
+        user.setText("anonymous");
+        layout.addView(user);
+
+        pass = new EditText(this);
+        pass.setHint("Senha FTP");
+        pass.setInputType(InputType.TYPE_CLASS_TEXT |
+                InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        layout.addView(pass);
+
+        folder = new EditText(this);
+        folder.setHint("Pasta de destino");
+        folder.setText("/data");
+        layout.addView(folder);
+
+        Button choose = new Button(this);
+        choose.setText("SELECIONAR ARQUIVO");
+        layout.addView(choose);
+
+        Button send = new Button(this);
+        send.setText("ENVIAR PARA O PS4");
+        layout.addView(send);
 
         status = new TextView(this);
-        status.setTextColor(0xFFFFFFFF);
-        status.setText("Informe os dados do PS4.");
-        status.setPadding(0, 25, 0, 0);
-        tela.addView(status);
+        status.setText("Aguardando arquivo...");
+        layout.addView(status);
 
-        setContentView(tela);
+        setContentView(layout);
 
-        escolher.setOnClickListener(v -> {
-            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            intent.setType("*/*");
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            startActivityForResult(intent, 100);
-        });
-
-        enviar.setOnClickListener(v -> enviarArquivo());
+        choose.setOnClickListener(v -> selectFile());
+        send.setOnClickListener(v -> uploadFile());
     }
 
-    private EditText campo(LinearLayout tela, String dica) {
-        EditText campo = new EditText(this);
-        campo.setSingleLine(true);
-        campo.setHint(dica);
-        campo.setHintTextColor(0xFFAAAAAA);
-        campo.setTextColor(0xFFFFFFFF);
-        tela.addView(campo);
-        return campo;
+    private void selectFile() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.setType("*/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        startActivityForResult(intent, 100);
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    protected void onActivityResult(int requestCode,
+            int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == 100 && resultCode == RESULT_OK && data != null) {
-            arquivoSelecionado = data.getData();
+        if (requestCode == 100 && resultCode == RESULT_OK
+                && data != null) {
+            selectedFile = data.getData();
 
-            String caminhoNome = arquivoSelecionado.getLastPathSegment();
-            if (caminhoNome != null) {
-                int pos = caminhoNome.lastIndexOf('/');
-                nomeArquivo = caminhoNome.substring(pos + 1);
+            Cursor cursor = getContentResolver().query(
+                    selectedFile, null, null, null, null);
+
+            if (cursor != null) {
+                try {
+                    if (cursor.moveToFirst()) {
+                        int index = cursor.getColumnIndex(
+                                OpenableColumns.DISPLAY_NAME);
+                        fileName = index >= 0
+                                ? cursor.getString(index) : "arquivo";
+                    }
+                } finally {
+                    cursor.close();
+                }
             }
 
-            status.setText("Arquivo selecionado: " + nomeArquivo);
+            if (fileName == null) fileName = "arquivo";
+
+            status.setText("Arquivo selecionado: " + fileName);
         }
     }
 
-    private void enviarArquivo() {
-        if (arquivoSelecionado == null) {
-            status.setText("Escolha um arquivo primeiro.");
+    private void uploadFile() {
+        if (selectedFile == null) {
+            Toast.makeText(this, "Selecione um arquivo primeiro",
+                    Toast.LENGTH_SHORT).show();
             return;
         }
 
-        final String endereco = ip.getText().toString().trim();
-        final String portaTexto = porta.getText().toString().trim();
-        final String login = usuario.getText().toString().trim();
-        final String senhaTexto = senha.getText().toString();
-        final String destino = caminho.getText().toString().trim();
+        final String host = ip.getText().toString().trim();
+        final String ftpUser = user.getText().toString().trim();
+        final String ftpPass = pass.getText().toString();
+        final String destination = folder.getText().toString().trim();
+        final String remotePort = port.getText().toString().trim();
+        final Uri uri = selectedFile;
+        final String name = fileName;
 
-        if (endereco.isEmpty() || portaTexto.isEmpty() || destino.isEmpty()) {
-            status.setText("Preencha IP, porta e pasta de destino.");
+        if (host.isEmpty() || remotePort.isEmpty()
+                || ftpUser.isEmpty()) {
+            status.setText("Preencha IP, porta e usuário.");
             return;
         }
 
-        final Uri uri = arquivoSelecionado;
-        final String nome = nomeArquivo;
-
-        enviar.setEnabled(false);
-        status.setText("Conectando ao PS4...");
+        sendStatus("Conectando ao PS4...");
 
         executor.execute(() -> {
             FTPClient ftp = new FTPClient();
 
             try {
-                int numeroPorta = Integer.parseInt(portaTexto);
-                ftp.connect(endereco, numeroPorta);
+                ftp.connect(host, Integer.parseInt(remotePort));
 
-                if (!ftp.login(login, senhaTexto)) {
-                    throw new Exception("Falha no login FTP.");
+                if (!ftp.login(ftpUser, ftpPass)) {
+                    throw new IOException("Falha no login FTP.");
                 }
 
                 ftp.enterLocalPassiveMode();
                 ftp.setFileType(FTP.BINARY_FILE_TYPE);
 
-                if (!ftp.changeWorkingDirectory(destino)) {
-                    throw new Exception("Pasta de destino não encontrada: " + destino);
+                if (!ftp.changeWorkingDirectory(destination)) {
+                    throw new IOException(
+                            "Não foi possível acessar a pasta " + destination);
                 }
 
-                InputStream entrada = getContentResolver().openInputStream(uri);
+                try (InputStream input =
+                        getContentResolver().openInputStream(uri)) {
 
-                if (entrada == null) {
-                    throw new Exception("Não foi possível abrir o arquivo.");
+                    if (input == null) {
+                        throw new IOException("Não foi possível abrir o arquivo.");
+                    }
+
+                    boolean uploaded = ftp.storeFile(name, input);
+
+                    if (!uploaded) {
+                        throw new IOException(
+                                "Falha no envio: " + ftp.getReplyString());
+                    }
                 }
 
-                boolean sucesso;
-                try (InputStream arquivo = entrada) {
-                    sucesso = ftp.storeFile(nome, arquivo);
-                }
-
-                if (!sucesso) {
-                    throw new Exception("O PS4 recusou o envio do arquivo.");
-                }
-
-                runOnUiThread(() -> status.setText("Arquivo enviado com sucesso!"));
+                sendStatus("Arquivo enviado com sucesso!");
 
             } catch (Exception e) {
-                String erro = e.getMessage();
-                runOnUiThread(() -> status.setText("Erro: " + erro));
+                sendStatus("Erro: " + e.getMessage());
 
             } finally {
                 try {
@@ -168,17 +188,20 @@ public class MainActivity extends Activity {
                         ftp.logout();
                         ftp.disconnect();
                     }
-                } catch (Exception ignored) {
+                } catch (IOException ignored) {
                 }
-
-                runOnUiThread(() -> enviar.setEnabled(true));
             }
         });
     }
 
+    private void sendStatus(String message) {
+        runOnUiThread(() -> status.setText(message));
+    }
+
     @Override
     protected void onDestroy() {
-        super.onDestroy();
         executor.shutdown();
+        super.onDestroy();
     }
-}
+            }
+            
