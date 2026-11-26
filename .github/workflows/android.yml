@@ -6,7 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Baixar projeto
         uses: actions/checkout@v4
@@ -22,7 +21,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Disponibilizar APK
+      - name: Salvar APK
         uses: actions/upload-artifact@v4
         with:
           name: IBO-BRAD-PLAYER
